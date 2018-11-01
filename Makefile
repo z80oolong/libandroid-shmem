@@ -1,13 +1,29 @@
-CFLAGS += -fpic -shared -std=c11 -Wall -Wextra -Wl,--version-script=exports.txt
+CC = gcc
+STRIP = strip
 
-libandroid-shmem.so: shmem.c shm.h
-	$(CC) $(CFLAGS) $(LDFLAGS) shmem.c -llog -o $@
+LIBANDROID_SHMEM_SO = libandroid-shmem.so
+TYPE = debian-noroot
 
-install: libandroid-shmem.so shm.h
-	install -D libandroid-shmem.so $(PREFIX)/lib/libandroid-shmem.so
+CFLAGS += -fPIC -shared -std=c11 -Wall -Wextra -Wl,--version-script=exports.txt
+LDFLAGS +=
+
+ifeq ($(TYPE), debian-noroot)
+LIBANDROID_SHMEM_SO = libandroid-shmem-termux.so
+CFLAGS += -DDEBIAN_NOROOT
+else
+LIBANDROID_SHMEM_SO = libandroid-shmem.so
+LDFLAGS += -llog
+endif
+
+$(LIBANDROID_SHMEM_SO): shmem.c shm.h
+	$(CC) $(CFLAGS) $(LDFLAGS) shmem.c -o $@
+	$(STRIP) $@
+
+install: $(LIBANDROID_SHMEM_SO) shm.h
+	install -D $(LIBANDROID_SHMEM_SO) $(PREFIX)/lib/$(LIBANDROID_SHMEM_SO)
 	install -D shm.h $(PREFIX)/include/sys/shm.h
 
 clean:
-	rm -f libandroid-shmem.so
+	rm -f libandroid-shmem.so libandroid-shmem-termux.so
 
 .PHONY: install

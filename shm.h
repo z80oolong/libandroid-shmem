@@ -11,6 +11,10 @@ __BEGIN_DECLS
 # define shmid_ds shmid64_ds
 #endif
 
+#ifdef DEBIAN_NOROOT
+typedef __key_t key_t;
+#endif
+
 /* Shared memory control operations. */
 extern int shmctl(int shmid, int cmd, struct shmid_ds* buf);
 

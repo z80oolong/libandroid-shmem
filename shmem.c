@@ -1,4 +1,10 @@
+#ifdef DEBIAN_NOROOT
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+#define _XOPEN_SOURCE 500
+#else
 #include <android/log.h>
+#endif
 #include <errno.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -10,13 +16,25 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <paths.h>
+#include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#include <string.h>
 
 #define __u32 uint32_t
+#ifdef DEBIAN_NOROOT
+#include "linux/ashmem.h"
+#else
 #include <linux/ashmem.h>
+#endif
 
 #include "shm.h"
 
+#ifdef DEBIAN_NOROOT
+#define DBG(fmt, ...) fprintf(stderr, "[shmem] " fmt "\n", __VA_ARGS__)
+#else
 #define DBG(...) __android_log_print(ANDROID_LOG_INFO, "shmem", __VA_ARGS__)
+#endif
 #define ASHV_KEY_SYMLINK_PATH _PATH_TMP "ashv_key_%d"
 #define ANDROID_SHMEM_SOCKNAME "/dev/shm/%08x"
 #define ROUND_UP(N, S) ((((N) + (S) - 1) / (S)) * (S))
@@ -189,7 +207,7 @@ static void* ashv_thread_function(void* arg)
 	struct sockaddr_un addr;
 	socklen_t len = sizeof(addr);
 	int sendsock;
-	//DBG("%s: thread started", __PRETTY_FUNCTION__);
+	DBG("%s: thread started", __PRETTY_FUNCTION__);
 	while ((sendsock = accept(sock, (struct sockaddr *)&addr, &len)) != -1) {
 		int shmid;
 		if (recv(sendsock, &shmid, sizeof(shmid), 0) != sizeof(shmid)) {
@@ -333,6 +351,7 @@ int shmget(key_t key, size_t size, int flags)
 	pthread_mutex_lock(&mutex);
 	char symlink_path[256];
 	if (key != IPC_PRIVATE) {
+		DBG ("shmget: key = %08x (is not IPC_PRIVATE)", key);
 		// (1) Check if symlink exists telling us where to connect.
 		// (2) If so, try to connect and open.
 		// (3) If connected and opened, done. If connection refused
@@ -367,8 +386,9 @@ int shmget(key_t key, size_t size, int flags)
 			}
 			if (symlink(num_buffer, symlink_path) == 0) break;
 		}
+	} else {
+		DBG ("shmget: key = %08x (is IPC_PRIVATE)", key);
 	}
-
 
 	int idx = shmem_amount;
 	char buf[256];
