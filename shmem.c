@@ -1,7 +1,5 @@
 #ifdef DEBIAN_NOROOT
-#define _BSD_SOURCE
 #define _GNU_SOURCE
-#define _XOPEN_SOURCE 500
 #else
 #include <android/log.h>
 #endif
@@ -89,6 +87,7 @@ static int ancil_send_fd(int sock, int fd)
 	cmsg->cmsg_type = SCM_RIGHTS;
 	((int*) CMSG_DATA(cmsg))[0] = fd;
 
+	DBG("%s: send fd %d", __PRETTY_FUNCTION__, fd);
 	return sendmsg(sock, &message_header, 0) >= 0 ? 0 : -1;
 }
 
@@ -120,7 +119,10 @@ static int ancil_recv_fd(int sock)
 
 	if (recvmsg(sock, &message_header, 0) < 0) return -1;
 
-	return ((int*) CMSG_DATA(cmsg))[0];
+	int _fd  = ((int*) CMSG_DATA(cmsg))[0];
+	DBG("%s: recv fd %d", __PRETTY_FUNCTION__, _fd);
+
+	return _fd;
 }
 
 static int ashmem_get_size_region(int fd)
@@ -145,11 +147,15 @@ static int ashmem_create_region(char const* name, size_t size)
 	if (fd < 0) return fd;
 
 	char name_buffer[ASHMEM_NAME_LEN] = {0};
-	strncpy(name_buffer, name, sizeof(name_buffer));
-	name_buffer[sizeof(name_buffer)-1] = 0;
+	DBG("%s: name `%s` size %d", __PRETTY_FUNCTION__, name, size);
+	int ret;
+	if(name) {
+		strncpy(name_buffer, name, sizeof(name_buffer));
+		name_buffer[sizeof(name_buffer)-1] = 0;
 
-	int ret = ioctl(fd, ASHMEM_SET_NAME, name_buffer);
-	if (ret < 0) goto error;
+		ret = ioctl(fd, ASHMEM_SET_NAME, name_buffer);
+		if (ret < 0) goto error;
+	}
 
 	ret = ioctl(fd, ASHMEM_SET_SIZE, size);
 	if (ret < 0) goto error;
@@ -194,9 +200,17 @@ static int ashv_socket_id_from_shmid(int shmid)
 
 static int ashv_find_local_index(int shmid)
 {
-	for (size_t i = 0; i < shmem_amount; i++)
-		if (shmem[i].id == shmid)
+	if (shmid < 0x10000) {
+		shmid = ashv_shmid_from_counter(shmid);
+	}
+
+	for (size_t i = 0; i < shmem_amount; i++) {
+		if (shmem[i].id == shmid) {
+			//DBG ("%s: index of shmid %08x is %d", __PRETTY_FUNCTION__, shmid, i);
 			return i;
+		}
+	}
+	DBG ("%s: cannot find shmid %x", __PRETTY_FUNCTION__, shmid);	
 	return -1;
 }
 
@@ -215,14 +229,17 @@ static void* ashv_thread_function(void* arg)
 			close(sendsock);
 			continue;
 		}
+		DBG("%s: recv shmid %08x", __PRETTY_FUNCTION__, shmid);
 		pthread_mutex_lock(&mutex);
 		int idx = ashv_find_local_index(shmid);
 		if (idx != -1) {
-			if (write(sendsock, &shmem[idx].key, sizeof(key_t)) != sizeof(key_t)) {
-				DBG("%s: ERROR: write failed: %s", __PRETTY_FUNCTION__, strerror(errno));
-			}
 			if (ancil_send_fd(sendsock, shmem[idx].descriptor) != 0) {
 				DBG("%s: ERROR: ancil_send_fd() failed: %s", __PRETTY_FUNCTION__, strerror(errno));
+			}
+			if (send(sendsock, &shmem[idx].key, sizeof(key_t), 0) != sizeof(key_t)) {
+				DBG("%s: ERROR: send() returned not %zu bytes: %s", __PRETTY_FUNCTION__, sizeof(key_t), strerror(errno));
+			} else {
+				DBG("%s: send key %08x", __PRETTY_FUNCTION__, shmem[idx].key);
 			}
 		} else {
 			DBG("%s: ERROR: cannot find shmid 0x%x", __PRETTY_FUNCTION__, shmid);
@@ -232,6 +249,7 @@ static void* ashv_thread_function(void* arg)
 		len = sizeof(addr);
 	}
 	DBG ("%s: ERROR: listen() failed, thread stopped", __PRETTY_FUNCTION__);
+	pthread_mutex_unlock(&mutex);
 	return NULL;
 }
 
@@ -245,6 +263,7 @@ static void android_shmem_delete(int idx)
 static int ashv_read_remote_segment(int shmid)
 {
 	struct sockaddr_un addr;
+	DBG ("%s: call shmid = %08x", __PRETTY_FUNCTION__, shmid);
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	sprintf(&addr.sun_path[1], ANDROID_SHMEM_SOCKNAME, ashv_socket_id_from_shmid(shmid));
@@ -260,16 +279,8 @@ static int ashv_read_remote_segment(int shmid)
 		close(recvsock);
 		return -1;
 	}
-
 	if (send(recvsock, &shmid, sizeof(shmid), 0) != sizeof(shmid)) {
 		DBG ("%s: send() failed on socket %s: %s", __PRETTY_FUNCTION__, addr.sun_path + 1, strerror(errno));
-		close(recvsock);
-		return -1;
-	}
-
-	key_t key;
-	if (read(recvsock, &key, sizeof(key_t)) != sizeof(key_t)) {
-		DBG("%s: ERROR: failed read", __PRETTY_FUNCTION__);
 		close(recvsock);
 		return -1;
 	}
@@ -280,6 +291,14 @@ static int ashv_read_remote_segment(int shmid)
 		close(recvsock);
 		return -1;
 	}
+
+	key_t key;
+	if (recv(recvsock, &key, sizeof(key_t), 0) != sizeof(key_t)) {
+		DBG("%s: ERROR: recv() returned not %zu bytes: %s", __PRETTY_FUNCTION__, sizeof(key_t), strerror(errno));
+	} else {
+		DBG("%s: recv key %08x", __PRETTY_FUNCTION__, key);
+	}
+
 	close(recvsock);
 
 	int size = ashmem_get_size_region(descriptor);
@@ -297,12 +316,14 @@ static int ashv_read_remote_segment(int shmid)
 	shmem[idx].addr = NULL;
 	shmem[idx].markedForDeletion = false;
 	shmem[idx].key = key;
+	DBG ("%s: created new remote shmem ID %d shmid %x FD %d size %zu", __PRETTY_FUNCTION__, idx, shmid, shmem[idx].descriptor, shmem[idx].size);
 	return idx;
 }
 
 /* Get shared memory area identifier. */
 int shmget(key_t key, size_t size, int flags)
 {
+	DBG ("%s: key %08x size %zu flags 0%o (flags are ignored)", __PRETTY_FUNCTION__, key, size, flags);
 	(void) flags;
 
 	ashv_check_pid();
@@ -326,7 +347,10 @@ int shmget(key_t key, size_t size, int flags)
 			ashv_local_socket_id = (getpid() + i) & 0xffff;
 			sprintf(&addr.sun_path[1], ANDROID_SHMEM_SOCKNAME, ashv_local_socket_id);
 			len = sizeof(addr.sun_family) + strlen(&addr.sun_path[1]) + 1;
-			if (bind(sock, (struct sockaddr *)&addr, len) != 0) continue;
+			if (bind(sock, (struct sockaddr *)&addr, len) != 0) {
+				DBG ("%s: cannot bind UNIX socket %s: %s, trying next one, len %d", __PRETTY_FUNCTION__, &addr.sun_path[1], strerror(errno), len);
+				continue;
+			}
 			DBG("%s: bound UNIX socket %s in pid=%d", __PRETTY_FUNCTION__, addr.sun_path + 1, getpid());
 			break;
 		}
@@ -351,7 +375,7 @@ int shmget(key_t key, size_t size, int flags)
 	pthread_mutex_lock(&mutex);
 	char symlink_path[256];
 	if (key != IPC_PRIVATE) {
-		DBG ("shmget: key = %08x (is not IPC_PRIVATE)", key);
+		DBG ("%s: key = %08x (is not IPC_PRIVATE)", __PRETTY_FUNCTION__, key);
 		// (1) Check if symlink exists telling us where to connect.
 		// (2) If so, try to connect and open.
 		// (3) If connected and opened, done. If connection refused
@@ -387,7 +411,7 @@ int shmget(key_t key, size_t size, int flags)
 			if (symlink(num_buffer, symlink_path) == 0) break;
 		}
 	} else {
-		DBG ("shmget: key = %08x (is IPC_PRIVATE)", key);
+		DBG ("%s: key = %08x (is IPC_PRIVATE)", __PRETTY_FUNCTION__, key);
 	}
 
 	int idx = shmem_amount;
@@ -416,7 +440,7 @@ int shmget(key_t key, size_t size, int flags)
 		pthread_mutex_unlock (&mutex);
 		return -1;
 	}
-	//DBG("%s: ID %d shmid %x FD %d size %zu", __PRETTY_FUNCTION__, idx, shmid, shmem[idx].descriptor, shmem[idx].size);
+	DBG("%s: ID %d shmid %x FD %d size %zu", __PRETTY_FUNCTION__, idx, shmid, shmem[idx].descriptor, shmem[idx].size);
 	/*
 	status = ashmem_set_prot_region (shmem[idx].descriptor, 0666);
 	if (status < 0) {
@@ -450,10 +474,13 @@ void* shmat(int shmid, void const* shmaddr, int shmflg)
 	int socket_id = ashv_socket_id_from_shmid(shmid);
 	void *addr;
 
+	DBG ("%s: shmid %08x shmaddr %p shmflg %d", __PRETTY_FUNCTION__, shmid, shmaddr, shmflg);
+
 	pthread_mutex_lock(&mutex);
 
 	int idx = ashv_find_local_index(shmid);
-	if (idx == -1 && socket_id != ashv_local_socket_id) {
+	DBG ("%s: shmid %08x idx %d socket_id %08x ashv_local_socket_id %08x", __PRETTY_FUNCTION__, shmid, idx, socket_id, ashv_local_socket_id);
+	if ((idx == -1) && (socket_id != ashv_local_socket_id)) {
 		idx = ashv_read_remote_segment(shmid);
 	}
 
@@ -483,15 +510,17 @@ int shmdt(void const* shmaddr)
 {
 	ashv_check_pid();
 
+	DBG ("%s: shmaddr %p", __PRETTY_FUNCTION__, shmaddr);
+
 	pthread_mutex_lock(&mutex);
 	for (size_t i = 0; i < shmem_amount; i++) {
 		if (shmem[i].addr == shmaddr) {
 			if (munmap(shmem[i].addr, shmem[i].size) != 0) {
-				DBG("%s: munmap %p failed", __PRETTY_FUNCTION__, shmaddr);
+				DBG("%s: unmap %p failed", __PRETTY_FUNCTION__, shmaddr);
 			}
 			shmem[i].addr = NULL;
 			DBG("%s: unmapped addr %p for FD %d ID %zu shmid %x", __PRETTY_FUNCTION__, shmaddr, shmem[i].descriptor, i, shmem[i].id);
-			if (shmem[i].markedForDeletion || ashv_socket_id_from_shmid(shmem[i].id) != ashv_local_socket_id) {
+			if (shmem[i].markedForDeletion || (ashv_socket_id_from_shmid(shmem[i].id) != ashv_local_socket_id)) {
 				DBG ("%s: deleting shmid %x", __PRETTY_FUNCTION__, shmem[i].id);
 				android_shmem_delete(i);
 			}

@@ -4,12 +4,13 @@ STRIP = strip
 LIBANDROID_SHMEM_SO = libandroid-shmem.so
 TYPE = debian-noroot
 
-CFLAGS += -fPIC -shared -std=c11 -Wall -Wextra -Wl,--version-script=exports.txt
+CFLAGS += -fPIC -shared -std=gnu99 -Wall -Wextra -Wl,--version-script=exports.txt
 LDFLAGS +=
 
 ifeq ($(TYPE), debian-noroot)
 LIBANDROID_SHMEM_SO = libandroid-shmem-termux.so
 CFLAGS += -DDEBIAN_NOROOT
+LDFLAGS += -lc -lpthread
 else
 LIBANDROID_SHMEM_SO = libandroid-shmem.so
 LDFLAGS += -llog

@@ -13,6 +13,8 @@ __BEGIN_DECLS
 
 #ifdef DEBIAN_NOROOT
 typedef __key_t key_t;
+#define shmid_ds shmid64_ds
+#define ipc_perm ipc64_perm
 #endif
 
 /* Shared memory control operations. */
