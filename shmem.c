@@ -87,7 +87,6 @@ static int ancil_send_fd(int sock, int fd)
 	cmsg->cmsg_type = SCM_RIGHTS;
 	((int*) CMSG_DATA(cmsg))[0] = fd;
 
-	DBG("%s: send fd %d", __PRETTY_FUNCTION__, fd);
 	return sendmsg(sock, &message_header, 0) >= 0 ? 0 : -1;
 }
 
@@ -119,10 +118,7 @@ static int ancil_recv_fd(int sock)
 
 	if (recvmsg(sock, &message_header, 0) < 0) return -1;
 
-	int _fd  = ((int*) CMSG_DATA(cmsg))[0];
-	DBG("%s: recv fd %d", __PRETTY_FUNCTION__, _fd);
-
-	return _fd;
+	return ((int*) CMSG_DATA(cmsg))[0];
 }
 
 static int ashmem_get_size_region(int fd)
@@ -238,9 +234,8 @@ static void* ashv_thread_function(void* arg)
 			}
 			if (send(sendsock, &shmem[idx].key, sizeof(key_t), 0) != sizeof(key_t)) {
 				DBG("%s: ERROR: send() returned not %zu bytes: %s", __PRETTY_FUNCTION__, sizeof(key_t), strerror(errno));
-			} else {
-				DBG("%s: send key %08x", __PRETTY_FUNCTION__, shmem[idx].key);
 			}
+			DBG("%s: send FD %d key %08x", __PRETTY_FUNCTION__, shmem[idx].descriptor, shmem[idx].key);
 		} else {
 			DBG("%s: ERROR: cannot find shmid 0x%x", __PRETTY_FUNCTION__, shmid);
 		}
@@ -295,10 +290,11 @@ static int ashv_read_remote_segment(int shmid)
 	key_t key;
 	if (recv(recvsock, &key, sizeof(key_t), 0) != sizeof(key_t)) {
 		DBG("%s: ERROR: recv() returned not %zu bytes: %s", __PRETTY_FUNCTION__, sizeof(key_t), strerror(errno));
-	} else {
-		DBG("%s: recv key %08x", __PRETTY_FUNCTION__, key);
+		close(recvsock);
+		return -1;
 	}
 
+	DBG("%s: recv FD %d key %08x", __PRETTY_FUNCTION__, descriptor, key);
 	close(recvsock);
 
 	int size = ashmem_get_size_region(descriptor);
@@ -479,13 +475,12 @@ void* shmat(int shmid, void const* shmaddr, int shmflg)
 	pthread_mutex_lock(&mutex);
 
 	int idx = ashv_find_local_index(shmid);
-	DBG ("%s: shmid %08x idx %d socket_id %08x ashv_local_socket_id %08x", __PRETTY_FUNCTION__, shmid, idx, socket_id, ashv_local_socket_id);
 	if ((idx == -1) && (socket_id != ashv_local_socket_id)) {
 		idx = ashv_read_remote_segment(shmid);
 	}
 
 	if (idx == -1) {
-		DBG ("%s: shmid %x does not exist", __PRETTY_FUNCTION__, shmid);
+		DBG ("%s: shmid %08x does not exist", __PRETTY_FUNCTION__, shmid);
 		pthread_mutex_unlock(&mutex);
 		errno = EINVAL;
 		return (void*) -1;
@@ -494,7 +489,7 @@ void* shmat(int shmid, void const* shmaddr, int shmflg)
 	if (shmem[idx].addr == NULL) {
 		shmem[idx].addr = mmap((void*) shmaddr, shmem[idx].size, PROT_READ | (shmflg == 0 ? PROT_WRITE : 0), MAP_SHARED, shmem[idx].descriptor, 0);
 		if (shmem[idx].addr == MAP_FAILED) {
-			DBG ("%s: mmap() failed for ID %x FD %d: %s", __PRETTY_FUNCTION__, idx, shmem[idx].descriptor, strerror(errno));
+			DBG ("%s: mmap() failed for ID %d FD %d: %s", __PRETTY_FUNCTION__, idx, shmem[idx].descriptor, strerror(errno));
 			shmem[idx].addr = NULL;
 		}
 	}
