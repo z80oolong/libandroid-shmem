@@ -18,6 +18,7 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <string.h>
+#include <stdarg.h>
 
 #define __u32 uint32_t
 #ifdef DEBIAN_NOROOT
@@ -29,7 +30,7 @@
 #include "shm.h"
 
 #ifdef DEBIAN_NOROOT
-#define DBG(fmt, ...) fprintf(stderr, "[shmem] " fmt "\n", __VA_ARGS__)
+#define DBG(fmt, ...) debug_message("[shmem] " fmt "\n", __VA_ARGS__)
 #else
 #define DBG(...) __android_log_print(ANDROID_LOG_INFO, "shmem", __VA_ARGS__)
 #endif
@@ -60,6 +61,27 @@ static int ashv_local_socket_id = 0;
 // created for.
 static int ashv_pid_setup = 0;
 static pthread_t ashv_listening_thread_id = 0;
+
+#ifdef DEBIAN_NOROOT
+static void debug_message(const char *format, ...)
+{
+	static int verbose = -1;
+	va_list ap;
+
+	if (verbose < 0) {
+		const char *quiet_env = (const char *)getenv("LIBANDROID_SHMEM_QUIET");
+		if ((quiet_env == NULL) || strncmp(quiet_env, "1", 1)) {
+			verbose = 1;
+		} else {
+			verbose = 0;
+		}
+	} else if (verbose) {
+		va_start(ap, format);
+		(void)vfprintf(stderr, format, ap);
+		va_end(ap);
+	}
+}
+#endif
 
 static int ancil_send_fd(int sock, int fd)
 {
@@ -196,10 +218,6 @@ static int ashv_socket_id_from_shmid(int shmid)
 
 static int ashv_find_local_index(int shmid)
 {
-	if (shmid < 0x10000) {
-		shmid = ashv_shmid_from_counter(shmid);
-	}
-
 	for (size_t i = 0; i < shmem_amount; i++) {
 		if (shmem[i].id == shmid) {
 			//DBG ("%s: index of shmid %08x is %d", __PRETTY_FUNCTION__, shmid, i);
@@ -225,6 +243,9 @@ static void* ashv_thread_function(void* arg)
 			close(sendsock);
 			continue;
 		}
+		if (shmid < 0x10000) {
+			shmid = ashv_shmid_from_counter(shmid);
+		}
 		DBG("%s: recv shmid %08x", __PRETTY_FUNCTION__, shmid);
 		pthread_mutex_lock(&mutex);
 		int idx = ashv_find_local_index(shmid);
@@ -245,6 +266,7 @@ static void* ashv_thread_function(void* arg)
 	}
 	DBG ("%s: ERROR: listen() failed, thread stopped", __PRETTY_FUNCTION__);
 	pthread_mutex_unlock(&mutex);
+	close(sendsock);
 	return NULL;
 }
 
