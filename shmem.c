@@ -81,6 +81,21 @@ static void debug_message(const char *format, ...)
 		va_end(ap);
 	}
 }
+
+static int shmem_disabled(void)
+{
+	static int disabled = -1;
+
+	if (disabled < 0) {
+		const char *disable_env = (const char *)getenv("LIBANDROID_SHMEM_DISABLE");
+		if ((disable_env == NULL) || strncmp(disable_env, "1", 1)) {
+			disabled = 0;
+		} else {
+			disabled = 1;
+		}
+	}
+	return disabled;
+}
 #endif
 
 static int ancil_send_fd(int sock, int fd)
@@ -265,8 +280,6 @@ static void* ashv_thread_function(void* arg)
 		len = sizeof(addr);
 	}
 	DBG ("%s: ERROR: listen() failed, thread stopped", __PRETTY_FUNCTION__);
-	pthread_mutex_unlock(&mutex);
-	close(sendsock);
 	return NULL;
 }
 
@@ -341,6 +354,12 @@ static int ashv_read_remote_segment(int shmid)
 /* Get shared memory area identifier. */
 int shmget(key_t key, size_t size, int flags)
 {
+	if (shmem_disabled()) {
+		DBG ("%s: function %s() is disabled.", __PRETTY_FUNCTION__, __PRETTY_FUNCTION__);
+		errno = EACCES;
+		return -1;
+	}
+
 	DBG ("%s: key %08x size %zu flags 0%o (flags are ignored)", __PRETTY_FUNCTION__, key, size, flags);
 	(void) flags;
 
@@ -487,6 +506,12 @@ int shmget(key_t key, size_t size, int flags)
 /* Attach shared memory segment. */
 void* shmat(int shmid, void const* shmaddr, int shmflg)
 {
+	if (shmem_disabled()) {
+		DBG ("%s: function %s() is disabled.", __PRETTY_FUNCTION__, __PRETTY_FUNCTION__);
+		errno = EACCES;
+		return NULL;
+	}
+
 	ashv_check_pid();
 
 	int socket_id = ashv_socket_id_from_shmid(shmid);
@@ -525,6 +550,12 @@ void* shmat(int shmid, void const* shmaddr, int shmflg)
 /* Detach shared memory segment. */
 int shmdt(void const* shmaddr)
 {
+	if (shmem_disabled()) {
+		DBG ("%s: function %s() is disabled.", __PRETTY_FUNCTION__, __PRETTY_FUNCTION__);
+		errno = EINVAL;
+		return -1;
+	}
+
 	ashv_check_pid();
 
 	DBG ("%s: shmaddr %p", __PRETTY_FUNCTION__, shmaddr);
@@ -555,6 +586,12 @@ int shmdt(void const* shmaddr)
 /* Shared memory control operation. */
 int shmctl(int shmid, int cmd, struct shmid_ds *buf)
 {
+	if (shmem_disabled()) {
+		DBG ("%s: function %s() is disabled.", __PRETTY_FUNCTION__, __PRETTY_FUNCTION__);
+		errno = EACCES;
+		return -1;
+	}
+
 	ashv_check_pid();
 
 	if (cmd == IPC_RMID) {
