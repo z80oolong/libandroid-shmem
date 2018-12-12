@@ -17,7 +17,7 @@ LDFLAGS += -llog
 endif
 
 $(LIBANDROID_SHMEM_SO): shmem.c shm.h
-	$(CC) $(CFLAGS) $(LDFLAGS) shmem.c -o $@
+	$(CC) $(CFLAGS) shmem.c -o $@ $(LDFLAGS)
 	$(STRIP) $@
 
 install: $(LIBANDROID_SHMEM_SO) shm.h
