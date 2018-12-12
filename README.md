@@ -2,13 +2,13 @@
 
 ## 概要
 
-動的ライブラリ ```libandroid-shmem.so``` は、 [Debian noroot 環境][DBNR] の作者である [pelya 氏][PELY]によって作成された、 共有メモリ関連の標準ライブラリ関数を ```/dev/ashmem``` によってエミュレートする [Debian noroot 環境][DBNR]のための動的ライブラリである [libandroid-shmem.so][PSHM] について、 [Termux の開発コミュニティ][TMUX]が [Termux 環境に対応するように移植したもの][TSHM]を、更に [Debian noroot 環境][DBNR]上で動作するように再移植した動的ライブラリです。
+動的ライブラリ ```libandroid-shmem-termux.so``` は、 [Debian noroot 環境][DBNR] の作者である [pelya 氏][PELY]によって作成された、 共有メモリ関連の標準ライブラリ関数を ```/dev/ashmem``` によってエミュレートする [Debian noroot 環境][DBNR]のための動的ライブラリである [libandroid-shmem.so][PSHM] について、 [Termux の開発コミュニティ][TMUX]が [Termux 環境に対応するように移植したもの][TSHM]を、更に [Debian noroot 環境][DBNR]上で動作するように再移植した動的ライブラリです。
 
-即ち、動的ライブラリ ```libandroid-shmem.so``` は、 [Termux の開発コミュニティ][TMUX]によって作成された [Termux 環境に対応するよう移植した ```libandroid-shmem.so```][TSHM] に、 "[Termux に移植された ```libandroid-shmem.so``` を Debian noroot 環境に再移植するための差分ファイル][GST1]" を適用したものです。
+即ち、動的ライブラリ ```libandroid-shmem-termux.so``` は、 [Termux の開発コミュニティ][TMUX]によって作成された [Termux 環境に対応するよう移植した ```libandroid-shmem.so```][TSHM] に、 "[Termux に移植された ```libandroid-shmem.so``` を Debian noroot 環境に再移植するための差分ファイル][GST1]" を適用したものです。
 
 ## ビルド及びインストール
 
-```libandroid-shmem.so``` のビルドには通常の make を使用します。先ずは、カレントディレクトリを Makefile が置かれているディレクトリに移動します。そして、以下の通りに make コマンドを実行します。
+```libandroid-shmem-termux.so``` のビルドには通常の make を使用します。先ずは、カレントディレクトリを Makefile が置かれているディレクトリに移動します。そして、以下の通りに make コマンドを実行します。
 
 ```
  $ cd /path/to/libandroid-shmem-termux  # (ここに、/path/to/libandroid-shmem-termux は、 libandroid-shmem-termux.so のソースコードが置かれているディレクトリ)
@@ -21,14 +21,14 @@
  $ make CC=/path/to/x86_64-linux-gnu-gcc  # (ここに、/path/to/x86_64-linux-gnu-gcc は、 libandroid-shmem-termux.so をビルドする際に使用する C コンパイラが置かれているパス)
 ```
 
-そして、 ```libandroid-shmem.so``` のビルドが完了した後は、以下のようにして、 ```libandroid-shmem.so``` を [Debian noroot 環境][DBNR]のルートディレクトリにインストールします。
+そして、 ```libandroid-shmem-termux.so``` のビルドが完了した後は、以下のようにして、 ```libandroid-shmem-termux.so``` を [Debian noroot 環境][DBNR]のルートディレクトリにインストールします。
 
 ```
  $ sudo install -v -m 0755 libandroid-shmem-termux.so /
 ```
 ## Debian noroot 環境への設定方法
 
-```libandroid-shmem.so``` 内のライブラリ関数を [Debian noroot 環境][DBNR]にて使用するには、以下のように、環境変数 ```LD_PRELOAD``` に ```libandroid-shmem.so``` の置かれているパスを設定し、各種アプリケーションを起動します。
+```libandroid-shmem-termux.so``` 内のライブラリ関数を [Debian noroot 環境][DBNR]にて使用するには、以下のように、環境変数 ```LD_PRELOAD``` に ```libandroid-shmem-termux.so``` の置かれているパスを設定し、各種アプリケーションを起動します。
 
 即ち、 [Debian noroot 環境][DBNR] の初期化ファイルである ```/proot.sh``` において、環境変数 ```LD_PRELOAD``` が定義されている行を以下のように修正します。
 
@@ -52,7 +52,7 @@ LD_PRELOAD="... /libandroid-shmem-termux.so ..."    # /libandroid-shmem.so を /
 
 ## 謝辞
 
-まず最初に、 [Debian noroot 環境][DBNR]及びそれに伴う ```libandroid-shmem.so``` を開発した [pelya 氏][PELY]に心より感謝致します。また、 ```libandroid-shmem.so``` の機能を強化して Termux 環境に移植した [termux の開発コミュニティ][TMUX]に心より感謝致します。
+まず最初に、 [Debian noroot 環境][DBNR]及びそれに伴う ```libandroid-shmem.so``` を開発した [pelya 氏][PELY]に心より感謝致します。また、 ```libandroid-shmem.so``` の機能を強化して Termux 環境に移植した [termux の開発コミュニティの関係各位][TMUX]に心より感謝致します。
 
 そして、 [Debian noroot 環境][DBNR]及び [Termux 環境][TMUX]に関わる全ての人々に心より感謝致します。
 
