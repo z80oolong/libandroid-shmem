@@ -15,7 +15,7 @@
  $ make
 ```
 
-ここで、以下のように ```make``` コマンドの引数に ```CC=...``` を指定すると、 ```libandroid-shmem.so``` のビルドの際に使用する C コンパイラを指定できます。これは、クロスコンパイルを行う際に有用です。
+ここで、以下のように ```make``` コマンドの引数に ```CC=...``` を指定すると、 ```libandroid-shmem-termux.so``` のビルドの際に使用する C コンパイラを指定できます。これは、クロスコンパイルを行う際に有用です。
 
 ```
  $ make CC=/path/to/x86_64-linux-gnu-gcc  # (ここに、/path/to/x86_64-linux-gnu-gcc は、 libandroid-shmem-termux.so をビルドする際に使用する C コンパイラが置かれているパス)
@@ -60,7 +60,7 @@ LD_PRELOAD="... /libandroid-shmem-termux.so ..."    # /libandroid-shmem.so を /
 
 本リポジトリは、 [pelya 氏][PELY]によって作成された、 共有メモリ関連の標準ライブラリ関数を ```/dev/ashmem``` によってエミュレートする [Debian noroot 環境][DBNR]のための動的ライブラリである [libandroid-shmem.so][PSHM] を基に、 [Termux の開発コミュニティ][TMUX]が [Termux 環境に対応するように移植したもの][TSHM]を、更に [Z.OOL. (mailto:zool@zool.jpn.org)][ZOOL] によって [Debian noroot 環境][DBNR]上で動作するように再移植したものです。
 
-従って、本リポジトリ及び本リポジトリによって生成される動的ライブラリ ```libandroid-shmem.so``` は、 [pelya 氏][PELY]と [Termux の開発コミュニティの関係各位][TMUX]及び [Z.OOL. (mailto:zool@zool.jpn.org)][ZOOL] が著作権を有し、 [Termux の開発コミュニティによる ```libandroid-shmem.so```][TSHM] と同様に [BSD 3-Clause License][BSD3] に基づいて配布されるものとします。詳細については、本リポジトリに同梱する ```LICENSE``` を参照して下さい。
+従って、本リポジトリ及び本リポジトリによって生成される動的ライブラリ ```libandroid-shmem-terux.so``` は、 [pelya 氏][PELY]と [Termux の開発コミュニティの関係各位][TMUX]及び [Z.OOL. (mailto:zool@zool.jpn.org)][ZOOL] が著作権を有し、 [Termux の開発コミュニティによる ```libandroid-shmem.so```][TSHM] と同様に [BSD 3-Clause License][BSD3] に基づいて配布されるものとします。詳細については、本リポジトリに同梱する ```LICENSE``` を参照して下さい。
 
 ## 追記
 
